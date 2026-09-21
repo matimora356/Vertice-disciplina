@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#111318" />
+  <title>Vértice — Disciplina</title>
+  <style>
+    :root{--bg:#0f1115;--panel:#171a21;--panel2:#1f232c;--text:#f4f4f2;--muted:#a8adb8;--accent:#f0d28a;--accent2:#8ec5ff;--line:#2b303a;--shadow:0 12px 30px rgba(0,0,0,.28);--radius:18px}
+    *{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#0d0f13,#12151b 45%,#0f1115);color:var(--text);font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif}
+    button,input,textarea,select{font:inherit}.app{max-width:980px;margin:auto;padding:18px 16px 110px}.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+    .brand h1{margin:0;font-size:1.35rem}.brand small{color:var(--muted)}.date{background:var(--panel);border:1px solid var(--line);padding:9px 12px;border-radius:999px;color:var(--muted)}
+    .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}.card{grid-column:span 12;background:rgba(23,26,33,.94);border:1px solid var(--line);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow)}
+    .card h2,.card h3{margin:0 0 10px}.muted{color:var(--muted)}.hero{background:linear-gradient(135deg,rgba(240,210,138,.12),rgba(142,197,255,.08))}
+    .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.stat{background:var(--panel2);padding:12px;border-radius:14px;border:1px solid var(--line)}.stat b{font-size:1.4rem;display:block}
+    .progress{height:10px;background:#0b0d11;border-radius:999px;overflow:hidden;border:1px solid var(--line)}.progress>div{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));width:0%}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.stack{display:grid;gap:10px}input,textarea,select{width:100%;background:#101319;color:var(--text);border:1px solid var(--line);border-radius:13px;padding:12px;outline:none}
+    textarea{min-height:130px;resize:vertical}.btn{border:0;border-radius:13px;padding:11px 14px;background:var(--accent);color:#151515;font-weight:700;cursor:pointer}.btn.secondary{background:var(--panel2);color:var(--text);border:1px solid var(--line)}.btn.danger{background:#3a2020;color:#ffd1d1;border:1px solid #593333}
+    .item{display:flex;align-items:flex-start;gap:10px;background:#11141a;border:1px solid var(--line);padding:12px;border-radius:14px}.item.done{opacity:.6}.item.done .title{text-decoration:line-through}.item .grow{flex:1}.title{font-weight:700}.meta{font-size:.85rem;color:var(--muted);margin-top:4px}.check{width:23px;height:23px;accent-color:#e5c675;margin-top:1px}
+    .pill{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--panel2);color:var(--muted);padding:6px 9px;border-radius:999px;font-size:.82rem}
+    .tabs{position:fixed;z-index:20;left:50%;transform:translateX(-50%);bottom:10px;width:min(94vw,760px);display:flex;gap:5px;background:rgba(18,21,27,.94);backdrop-filter:blur(16px);border:1px solid var(--line);padding:7px;border-radius:22px;box-shadow:var(--shadow);overflow-x:auto}
+    .tab{flex:1;min-width:84px;background:transparent;border:0;color:var(--muted);padding:10px 9px;border-radius:15px;cursor:pointer}.tab.active{background:var(--panel2);color:var(--text)}.view{display:none}.view.active{display:block}
+    .section-title{display:flex;justify-content:space-between;align-items:center;margin:4px 0 12px}.idea-hit{border-left:3px solid var(--accent);padding-left:10px;margin:8px 0}.empty{padding:20px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:14px}
+    @media(min-width:760px){.half{grid-column:span 6}.third{grid-column:span 4}.app{padding-top:28px}}
+  </style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="brand"><h1>Vértice — Disciplina</h1><small>Haz lo que dijiste que ibas a hacer.</small></div>
+    <div class="date" id="todayLabel"></div>
+  </div>
+
+  <section id="home" class="view active"><div class="grid">
+    <div class="card hero"><h2>Hoy</h2><p class="muted">Tres victorias. No necesitas un día perfecto.</p><div class="stack" id="dailyWins"></div><div style="margin-top:12px" class="progress"><div id="dailyProgress"></div></div></div>
+    <div class="card third"><h3>Metas activas</h3><div class="stat"><b id="activeGoals">0</b><span class="muted">pendientes</span></div></div>
+    <div class="card third"><h3>Racha máxima</h3><div class="stat"><b id="bestStreak">0</b><span class="muted">días</span></div></div>
+    <div class="card third"><h3>Logros</h3><div class="stat"><b id="achievementCount">0</b><span class="muted">conseguidos</span></div></div>
+    <div class="card"><div class="section-title"><h3>Esta semana</h3><span class="pill" id="weekProgressLabel">0%</span></div><div class="progress"><div id="weekProgress"></div></div><div class="stack" id="weekChecklist" style="margin-top:12px"></div></div>
+  </div></section>
+
+  <section id="goals" class="view"><div class="grid">
+    <div class="card half"><h2>Nueva meta</h2><div class="stack"><input id="goalTitle" placeholder="Ej. Publicar 1 video de Vértice esta semana" /><select id="goalArea"><option>Colegio</option><option>Vértice</option><option>Dinero</option><option>Ejercicio</option><option>Creatividad</option><option>Personal</option><option>Otro</option></select><input id="goalDeadline" type="date" /><button class="btn" onclick="addGoal()">Agregar meta</button></div></div>
+    <div class="card half"><h2>Metas importantes</h2><p class="muted">Marca ⭐ en las que realmente importan.</p><div id="goalsList" class="stack"></div></div>
+  </div></section>
+
+  <section id="streaks" class="view"><div class="grid">
+    <div class="card half"><h2>Nueva racha</h2><div class="stack"><input id="streakTitle" placeholder="Ej. Entrenar" /><button class="btn" onclick="addStreak()">Crear racha</button></div></div>
+    <div class="card half"><h2>Mis rachas</h2><div id="streakList" class="stack"></div></div>
+  </div></section>
+
+  <section id="achievements" class="view"><div class="grid">
+    <div class="card half"><h2>Registrar logro</h2><div class="stack"><input id="achievementTitle" placeholder="Ej. Terminé mi primer bolso mensajero" /><button class="btn" onclick="addAchievement()">Guardar logro</button></div></div>
+    <div class="card half"><h2>Logros conseguidos</h2><div id="achievementList" class="stack"></div></div>
+  </div></section>
+
+  <section id="progressView" class="view"><div class="grid"><div class="card"><h2>Progreso</h2><p class="muted">No mide perfección. Mide constancia.</p><div class="stats"><div class="stat"><b id="goalRate">0%</b><span class="muted">metas completadas</span></div><div class="stat"><b id="weekRate">0%</b><span class="muted">checklist semanal</span></div><div class="stat"><b id="todayRate">0%</b><span class="muted">victorias de hoy</span></div></div></div></div></section>
+
+  <section id="ideas" class="view"><div class="grid">
+    <div class="card half"><h2>Ideas / bloc de notas</h2><p class="muted">Escribe libre. El prototipo detecta frases que parecen acciones o metas.</p><textarea id="ideaText" placeholder="Ej. Quiero terminar un bolso mensajero antes de que acabe octubre..."></textarea><div class="row" style="margin-top:10px"><button class="btn" onclick="saveIdea()">Guardar nota</button><button class="btn secondary" onclick="analyzeIdea()">Analizar mi nota</button></div><div id="ideaAnalysis" style="margin-top:14px"></div></div>
+    <div class="card half"><h2>Notas guardadas</h2><div id="ideasList" class="stack"></div></div>
+  </div></section>
+</div>
+
+<nav class="tabs">
+  <button class="tab active" data-view="home">Inicio</button><button class="tab" data-view="goals">Metas</button><button class="tab" data-view="streaks">Rachas</button><button class="tab" data-view="achievements">Logros</button><button class="tab" data-view="progressView">Progreso</button><button class="tab" data-view="ideas">Ideas</button>
+</nav>
+
+<script>
+const KEY='vertice_disciplina_v1';
+const iso=d=>d.toISOString().slice(0,10);
+const today=iso(new Date());
+const defaultState={
+  dailyWins:{labels:["Colegio: entregar y avanzar","Proyecto/futuro: crear o aprender","Yo: ejercicio, orden o autocontrol"],checks:{}},
+  weekChecklist:[
+    {id:"school",t:"No dejar tareas atrasadas",done:false},
+    {id:"study",t:"Estudiar 4 días (20–30 min)",done:false},
+    {id:"vertice1",t:"2 sesiones de Vértice",done:false},
+    {id:"vertice2",t:"Publicar 1 video de Vértice",done:false},
+    {id:"money",t:"Ahorrar mínimo $5",done:false},
+    {id:"income",t:"Hacer 1 intento real de ganar dinero",done:false},
+    {id:"exercise",t:"Entrenar 3 veces",done:false},
+    {id:"screen",t:"Reducir pantalla antes de dormir",done:false},
+    {id:"music",t:"Practicar una pieza de Halloween 2 veces",done:false},
+    {id:"review",t:"Revisión del domingo: qué cumplí y qué ajusto",done:false}
+  ],
+  goals:[],
+  streaks:[{id:"exercise",title:"Ejercicio",current:0,best:0,last:null},{id:"study",title:"Estudiar antes del ocio",current:0,best:0,last:null}],
+  achievements:[],ideas:[]
+};
+let state=JSON.parse(localStorage.getItem(KEY)||"null")||structuredClone(defaultState);
+function save(){localStorage.setItem(KEY,JSON.stringify(state));renderAll()}
+function esc(s){return(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function uid(){return Math.random().toString(36).slice(2)+Date.now().toString(36)}
+document.getElementById('todayLabel').textContent=new Intl.DateTimeFormat('es-PA',{weekday:'short',day:'numeric',month:'short'}).format(new Date());
+document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.getElementById(b.dataset.view).classList.add('active')});
+
+function renderDaily(){const host=document.getElementById('dailyWins');host.innerHTML='';const checks=state.dailyWins.checks[today]||[false,false,false];state.dailyWins.labels.forEach((label,i)=>{const div=document.createElement('label');div.className='item'+(checks[i]?' done':'');div.innerHTML=`<input class="check" type="checkbox" ${checks[i]?'checked':''}><div class="grow"><div class="title">${esc(label)}</div></div>`;div.querySelector('input').onchange=e=>{const arr=state.dailyWins.checks[today]||[false,false,false];arr[i]=e.target.checked;state.dailyWins.checks[today]=arr;save()};host.appendChild(div)});const pct=Math.round(checks.filter(Boolean).length/3*100);document.getElementById('dailyProgress').style.width=pct+'%';document.getElementById('todayRate').textContent=pct+'%'}
+function renderWeek(){const host=document.getElementById('weekChecklist');host.innerHTML='';state.weekChecklist.forEach((x,i)=>{const d=document.createElement('label');d.className='item'+(x.done?' done':'');d.innerHTML=`<input class="check" type="checkbox" ${x.done?'checked':''}><div class="grow"><div class="title">${esc(x.t)}</div></div>`;d.querySelector('input').onchange=e=>{state.weekChecklist[i].done=e.target.checked;save()};host.appendChild(d)});const pct=Math.round(state.weekChecklist.filter(x=>x.done).length/state.weekChecklist.length*100);document.getElementById('weekProgress').style.width=pct+'%';document.getElementById('weekProgressLabel').textContent=pct+'%';document.getElementById('weekRate').textContent=pct+'%'}
+function addGoal(){const t=document.getElementById('goalTitle').value.trim();if(!t)return;state.goals.push({id:uid(),title:t,area:document.getElementById('goalArea').value,deadline:document.getElementById('goalDeadline').value,done:false,star:false});document.getElementById('goalTitle').value='';save()}
+function renderGoals(){const host=document.getElementById('goalsList');host.innerHTML='';if(!state.goals.length)host.innerHTML='<div class="empty">Todavía no hay metas. Crea una que de verdad puedas cumplir.</div>';[...state.goals].sort((a,b)=>Number(b.star)-Number(a.star)).forEach(g=>{const d=document.createElement('div');d.className='item'+(g.done?' done':'');d.innerHTML=`<input class="check" type="checkbox" ${g.done?'checked':''}><div class="grow"><div class="title">${g.star?'⭐ ':''}${esc(g.title)}</div><div class="meta">${esc(g.area)}${g.deadline?' · '+g.deadline:''}</div></div><button class="btn secondary star">${g.star?'★':'☆'}</button><button class="btn danger del">×</button>`;d.querySelector('input').onchange=e=>{g.done=e.target.checked;if(g.done)maybeAchievementFromGoal(g);save()};d.querySelector('.star').onclick=()=>{g.star=!g.star;save()};d.querySelector('.del').onclick=()=>{state.goals=state.goals.filter(x=>x.id!==g.id);save()};host.appendChild(d)});document.getElementById('activeGoals').textContent=state.goals.filter(g=>!g.done).length;const rate=state.goals.length?Math.round(state.goals.filter(g=>g.done).length/state.goals.length*100):0;document.getElementById('goalRate').textContent=rate+'%'}
+function maybeAchievementFromGoal(g){if(!state.achievements.some(a=>a.sourceGoal===g.id))state.achievements.push({id:uid(),title:'Meta cumplida: '+g.title,date:today,sourceGoal:g.id})}
+function addStreak(){const t=document.getElementById('streakTitle').value.trim();if(!t)return;state.streaks.push({id:uid(),title:t,current:0,best:0,last:null});document.getElementById('streakTitle').value='';save()}
+function hitStreak(s){if(s.last===today)return;const y=new Date();y.setDate(y.getDate()-1);if(s.last===iso(y))s.current+=1;else s.current=1;s.best=Math.max(s.best,s.current);s.last=today;save()}
+function renderStreaks(){const host=document.getElementById('streakList');host.innerHTML='';state.streaks.forEach(s=>{const d=document.createElement('div');d.className='item';d.innerHTML=`<div class="grow"><div class="title">🔥 ${esc(s.title)}</div><div class="meta">Actual: ${s.current} · Mejor: ${s.best}${s.last?' · Último: '+s.last:''}</div></div><button class="btn hit">${s.last===today?'Hecho hoy':'Marcar hoy'}</button><button class="btn danger del">×</button>`;d.querySelector('.hit').onclick=()=>hitStreak(s);d.querySelector('.del').onclick=()=>{state.streaks=state.streaks.filter(x=>x.id!==s.id);save()};host.appendChild(d)});document.getElementById('bestStreak').textContent=Math.max(0,...state.streaks.map(s=>s.best))}
+function addAchievement(){const t=document.getElementById('achievementTitle').value.trim();if(!t)return;state.achievements.unshift({id:uid(),title:t,date:today});document.getElementById('achievementTitle').value='';save()}
+function renderAchievements(){const host=document.getElementById('achievementList');host.innerHTML='';if(!state.achievements.length)host.innerHTML='<div class="empty">Tus logros aparecerán aquí.</div>';state.achievements.forEach(a=>{const d=document.createElement('div');d.className='item';d.innerHTML=`<div class="grow"><div class="title">🏆 ${esc(a.title)}</div><div class="meta">${a.date}</div></div><button class="btn danger">×</button>`;d.querySelector('button').onclick=()=>{state.achievements=state.achievements.filter(x=>x.id!==a.id);save()};host.appendChild(d)});document.getElementById('achievementCount').textContent=state.achievements.length}
+function saveIdea(){const txt=document.getElementById('ideaText').value.trim();if(!txt)return;state.ideas.unshift({id:uid(),text:txt,date:today});document.getElementById('ideaText').value='';document.getElementById('ideaAnalysis').innerHTML='';save()}
+function analyzeIdea(){const txt=document.getElementById('ideaText').value.trim();const host=document.getElementById('ideaAnalysis');host.innerHTML='';if(!txt){host.innerHTML='<div class="empty">Escribe algo primero.</div>';return}const sentences=txt.split(/(?<=[.!?])\s+|\n+/).map(s=>s.trim()).filter(Boolean);const hits=sentences.filter(s=>/\b(quiero|voy a|debo|tengo que|necesito|terminar|hacer|crear|aprender|ahorrar|publicar|entrenar|estudiar|practicar|empezar|lograr)\b/i.test(s));if(!hits.length){host.innerHTML='<div class="empty">No detecté una acción clara. Puedes guardarla como idea igualmente.</div>';return}host.innerHTML='<div class="muted" style="margin-bottom:8px">Posibles metas detectadas:</div>';hits.slice(0,4).forEach(s=>{const d=document.createElement('div');d.className='idea-hit';d.innerHTML=`<div>${esc(s)}</div><div class="row" style="margin-top:8px"><button class="btn makegoal">Convertir en meta</button><button class="btn secondary keep">Dejar como idea</button></div>`;d.querySelector('.makegoal').onclick=()=>{state.goals.push({id:uid(),title:s,area:'Personal',deadline:'',done:false,star:false});save();d.innerHTML='<span class="pill">Convertida en meta ✓</span>'};d.querySelector('.keep').onclick=()=>{state.ideas.unshift({id:uid(),text:s,date:today});save();d.innerHTML='<span class="pill">Guardada como idea ✓</span>'};host.appendChild(d)})}
+function renderIdeas(){const host=document.getElementById('ideasList');host.innerHTML='';if(!state.ideas.length)host.innerHTML='<div class="empty">Todavía no hay notas guardadas.</div>';state.ideas.forEach(n=>{const d=document.createElement('div');d.className='item';d.innerHTML=`<div class="grow"><div>${esc(n.text)}</div><div class="meta">${n.date}</div></div><button class="btn danger">×</button>`;d.querySelector('button').onclick=()=>{state.ideas=state.ideas.filter(x=>x.id!==n.id);save()};host.appendChild(d)})}
+function renderAll(){renderDaily();renderWeek();renderGoals();renderStreaks();renderAchievements();renderIdeas()}
+renderAll();
+</script>
+</body>
+</html>
