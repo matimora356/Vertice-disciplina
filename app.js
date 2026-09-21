@@ -223,9 +223,18 @@ async function testNotification(){
  $("#notificationStatus").textContent="Notificación de prueba enviada."
 }
 
+function parseFirebaseConfig(raw){
+ let text=String(raw||"").trim();
+ const match=text.match(/(?:const|let|var)\s+firebaseConfig\s*=\s*({[\s\S]*?})\s*;?/);
+ if(match) text=match[1];
+ text=text.replace(/\/\*[\s\S]*?\*\//g,"").replace(/^\s*\/\/.*$/gm,"");
+ try{return JSON.parse(text)}catch{}
+ text=text.replace(/([,{]\s*)([A-Za-z_$][\w$]*)(\s*:)/g,'$1"$2"$3').replace(/'/g,'"').replace(/,\s*}/g,'}');
+ try{return JSON.parse(text)}catch{throw new Error("No pude leer la configuración. Pega el bloque firebaseConfig completo que te da Firebase.")}
+}
 async function initCloud(){
  const raw=localStorage.getItem(FIREBASE_KEY);if(!raw)throw new Error("Primero pega y guarda la configuración de Firebase.");
- let cfg;try{cfg=JSON.parse(raw)}catch{throw new Error("La configuración de Firebase no es JSON válido.")}
+ const cfg=parseFirebaseConfig(raw)
  $("#cloudStatus").textContent="Conectando...";
  const [appM,authM,fsM]=await Promise.all([
    import("https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js"),
@@ -297,7 +306,7 @@ $("#streakForm").addEventListener("submit",e=>{e.preventDefault();const title=$(
 $("#analyzeIdeaBtn").onclick=analyzeIdea;$("#saveIdeaBtn").onclick=()=>{const text=$("#ideaText").value.trim();if(!text)return;state.ideas.unshift({id:uid(),text,date:today()});$("#ideaText").value="";$("#ideaAnalysis").innerHTML="";persist()};
 $("#calendarReminderBtn").onclick=createICS;$("#testNotificationBtn").onclick=()=>testNotification().catch(showError);
 $("#reminderTime").onchange=()=>{state.settings.reminderTime=$("#reminderTime").value;persist()};
-$("#saveFirebaseBtn").onclick=()=>{try{JSON.parse($("#firebaseConfig").value);localStorage.setItem(FIREBASE_KEY,$("#firebaseConfig").value.trim());toast("Configuración guardada")}catch{showError(new Error("JSON de Firebase inválido"))}};
+$("#saveFirebaseBtn").onclick=()=>{try{parseFirebaseConfig($("#firebaseConfig").value);localStorage.setItem(FIREBASE_KEY,$("#firebaseConfig").value.trim());toast("Configuración guardada")}catch(e){showError(e)}};
 $("#connectFirebaseBtn").onclick=()=>initCloud().catch(showError);$("#signInBtn").onclick=()=>signIn(false).catch(showError);$("#registerBtn").onclick=()=>signIn(true).catch(showError);$("#signOutBtn").onclick=()=>signOutCloud().catch(showError);
 $("#exportBtn").onclick=exportData;$("#importInput").onchange=e=>{const f=e.target.files?.[0];if(f)importData(f).catch(showError)};
 window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredInstall=e;$("#installBtn").hidden=false});$("#installBtn").onclick=async()=>{if(deferredInstall){deferredInstall.prompt();await deferredInstall.userChoice;deferredInstall=null;$("#installBtn").hidden=true}};
