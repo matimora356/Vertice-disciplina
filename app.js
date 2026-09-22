@@ -63,8 +63,20 @@ function migrate(){
 }
 function normalize(s){
  const n=freshState();
+ const weekly=Array.isArray(s.weeklyTasks)?s.weeklyTasks.map(t=>({...t})):n.weeklyTasks.map(t=>({...t}));
+ // V2 migration fix: older saved states replaced the default weekly list,
+ // which could remove the built-in savings tracker completely.
+ let moneyTask=weekly.find(t=>t.type==="money");
+ if(!moneyTask){
+   moneyTask=weekly.find(t=>/ahorr/i.test(String(t.title||""))||String(t.unit||"").trim()==="$");
+   if(moneyTask)moneyTask.type="money";
+ }
+ if(!moneyTask){
+   const def=n.weeklyTasks.find(t=>t.type==="money");
+   weekly.splice(Math.min(3,weekly.length),0,{...def,id:uid()});
+ }
  return {...n,...s,meta:{...n.meta,...s.meta},dailyWins:{...n.dailyWins,...s.dailyWins},history:{...n.history,...s.history},settings:{...n.settings,...s.settings},
- weeklyTasks:Array.isArray(s.weeklyTasks)?s.weeklyTasks:n.weeklyTasks,goals:Array.isArray(s.goals)?s.goals:[],calendarTasks:Array.isArray(s.calendarTasks)?s.calendarTasks:[],streaks:Array.isArray(s.streaks)?s.streaks:n.streaks,ideas:Array.isArray(s.ideas)?s.ideas:[],achievements:Array.isArray(s.achievements)?s.achievements:[]};
+ weeklyTasks:weekly,goals:Array.isArray(s.goals)?s.goals:[],calendarTasks:Array.isArray(s.calendarTasks)?s.calendarTasks:[],streaks:Array.isArray(s.streaks)?s.streaks:n.streaks,ideas:Array.isArray(s.ideas)?s.ideas:[],achievements:Array.isArray(s.achievements)?s.achievements:[]};
 }
 let state=migrate();
 let cloud={ready:false,user:null,db:null,auth:null,mods:null,unsub:null,applying:false,timer:null};
@@ -301,7 +313,7 @@ $("#newGoalBtn").onclick=()=>openGoal();$("#quickAdd").onclick=()=>openTask(null
 $("#prevMonth").onclick=()=>{calCursor.setMonth(calCursor.getMonth()-1);renderCalendar()};$("#nextMonth").onclick=()=>{calCursor.setMonth(calCursor.getMonth()+1);renderCalendar()};
 $("#goalForm").addEventListener("submit",e=>{e.preventDefault();const id=$("#goalId").value,obj={id:id||uid(),title:$("#goalTitle").value.trim(),area:$("#goalArea").value,deadline:$("#goalDeadline").value,priority:$("#goalPriority").checked,done:false,createdAt:Date.now()};if(!obj.title)return;if(id){const old=state.goals.find(g=>g.id===id);Object.assign(old,obj,{done:old.done})}else state.goals.push(obj);$("#goalDialog").close();persist()});
 $("#taskForm").addEventListener("submit",e=>{e.preventDefault();const id=$("#taskId").value,obj={id:id||uid(),title:$("#taskTitle").value.trim(),date:$("#taskDate").value,area:$("#taskArea").value,done:false};if(id){const old=state.calendarTasks.find(t=>t.id===id);Object.assign(old,obj,{done:old.done})}else state.calendarTasks.push(obj);selectedDate=obj.date;$("#taskDialog").close();persist()});
-$("#weeklyForm").addEventListener("submit",e=>{e.preventDefault();const id=$("#weeklyId").value,obj={id:id||uid(),title:$("#weeklyTitle").value.trim(),target:Number($("#weeklyTarget").value)||1,unit:$("#weeklyUnit").value.trim()||"veces",current:0};if(id){const old=state.weeklyTasks.find(t=>t.id===id);Object.assign(old,obj,{current:old.current,type:old.type})}else state.weeklyTasks.push(obj);$("#weeklyDialog").close();persist()});
+$("#weeklyForm").addEventListener("submit",e=>{e.preventDefault();const id=$("#weeklyId").value,title=$("#weeklyTitle").value.trim(),unit=$("#weeklyUnit").value.trim()||"veces",obj={id:id||uid(),title,target:Number($("#weeklyTarget").value)||1,unit,current:0,type:(/ahorr/i.test(title)||unit==="$")?"money":undefined};if(id){const old=state.weeklyTasks.find(t=>t.id===id);Object.assign(old,obj,{current:old.current})}else state.weeklyTasks.push(obj);$("#weeklyDialog").close();persist()});
 $("#streakForm").addEventListener("submit",e=>{e.preventDefault();const title=$("#streakTitle").value.trim();if(title)state.streaks.push({id:uid(),title,dates:[]});$("#streakTitle").value="";$("#streakDialog").close();persist()});
 $("#analyzeIdeaBtn").onclick=analyzeIdea;$("#saveIdeaBtn").onclick=()=>{const text=$("#ideaText").value.trim();if(!text)return;state.ideas.unshift({id:uid(),text,date:today()});$("#ideaText").value="";$("#ideaAnalysis").innerHTML="";persist()};
 $("#calendarReminderBtn").onclick=createICS;$("#testNotificationBtn").onclick=()=>testNotification().catch(showError);
