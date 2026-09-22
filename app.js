@@ -15,7 +15,7 @@ const weekKey=()=>localISO(startOfWeek());
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 
 const freshState=()=>({
- version:2,
+ version:3,
  meta:{lastModified:Date.now(),weekKey:weekKey()},
  dailyWins:{
    labels:["Colegio: entregar y avanzar","Proyecto/futuro: crear o aprender","Yo: ejercicio, orden o autocontrol"],
@@ -39,6 +39,14 @@ const freshState=()=>({
  ],
  ideas:[],
  achievements:[],
+ finance:{goal:100,transactions:[]},
+ workouts:{sessions:[]},
+ school:{subjects:[]},
+ projects:[],
+ focus:{sessions:[]},
+ journal:{entries:{}},
+ tomorrowPlans:{},
+ discipline:{startDate:today(),impulseWins:[]},
  history:{weeks:[]},
  settings:{reminderTime:"06:00"}
 });
@@ -76,6 +84,14 @@ function normalize(s){
    weekly.splice(Math.min(3,weekly.length),0,{...def,id:uid()});
  }
  return {...n,...s,meta:{...n.meta,...s.meta},dailyWins:{...n.dailyWins,...s.dailyWins},history:{...n.history,...s.history},settings:{...n.settings,...s.settings},
+ finance:{...n.finance,...(s.finance||{}),transactions:Array.isArray(s.finance?.transactions)?s.finance.transactions:[]},
+ workouts:{...n.workouts,...(s.workouts||{}),sessions:Array.isArray(s.workouts?.sessions)?s.workouts.sessions:[]},
+ school:{...n.school,...(s.school||{}),subjects:Array.isArray(s.school?.subjects)?s.school.subjects:[]},
+ focus:{...n.focus,...(s.focus||{}),sessions:Array.isArray(s.focus?.sessions)?s.focus.sessions:[]},
+ journal:{...n.journal,...(s.journal||{}),entries:{...n.journal.entries,...(s.journal?.entries||{})}},
+ tomorrowPlans:{...n.tomorrowPlans,...(s.tomorrowPlans||{})},
+ discipline:{...n.discipline,...(s.discipline||{}),impulseWins:Array.isArray(s.discipline?.impulseWins)?s.discipline.impulseWins:[]},
+ projects:Array.isArray(s.projects)?s.projects:[],
  weeklyTasks:weekly,goals:Array.isArray(s.goals)?s.goals:[],calendarTasks:Array.isArray(s.calendarTasks)?s.calendarTasks:[],streaks:Array.isArray(s.streaks)?s.streaks:n.streaks,ideas:Array.isArray(s.ideas)?s.ideas:[],achievements:Array.isArray(s.achievements)?s.achievements:[]};
 }
 let state=migrate();
@@ -83,6 +99,8 @@ let cloud={ready:false,user:null,db:null,auth:null,mods:null,unsub:null,applying
 let calCursor=new Date();calCursor.setDate(1);calCursor.setHours(12,0,0,0);
 let selectedDate=today();
 let deferredInstall=null;
+let focusMinutes=25,focusRemaining=25*60,focusInterval=null,focusStartedAt=null;
+let urgeRemaining=10*60,urgeInterval=null;
 
 function closeWeekIfNeeded(){
  const wk=weekKey();
@@ -114,7 +132,7 @@ function showError(e){console.error(e);toast(e?.message||"Ocurrió un error")}
 function setView(id){
  $$(".view").forEach(v=>v.classList.toggle("active",v.id===id));
  $$(".nav-btn").forEach(b=>b.classList.toggle("active",b.dataset.view===id));
- const titles={home:"Hoy",goals:"Metas",calendar:"Calendario",streaks:"Rachas",ideas:"Ideas",stats:"Progreso",settings:"Ajustes"};
+ const titles={home:"Hoy",goals:"Metas",calendar:"Calendario",workout:"Entreno",finance:"Dinero",school:"Colegio",projects:"Proyectos",streaks:"Rachas",ideas:"Ideas",journal:"Diario",stats:"Progreso",settings:"Ajustes"};
  $("#viewTitle").textContent=titles[id]||"Vértice";
  window.scrollTo({top:0,behavior:"smooth"});
 }
@@ -200,12 +218,85 @@ function renderStats(){
  chart.innerHTML=cols.join("");
  $("#weekHistory").innerHTML=(state.history.weeks||[]).map(w=>`<div class="history-row"><span>${fmtDate(w.week)}</span><div class="mini-progress"><span style="width:${w.score}%"></span></div><strong>${w.score}%</strong></div>`).join("")||'<div class="empty">Tu historial aparecerá cuando cierre la primera semana.</div>';
 }
+
+function weekKeyOfDate(s){return localISO(startOfWeek(new Date(s+"T12:00:00")))}
+function tomorrowISO(){const d=new Date();d.setDate(d.getDate()+1);return localISO(d)}
+function money(n){return "$"+Number(n||0).toFixed(2)}
+function disciplineDay(){
+ const start=new Date((state.discipline.startDate||today())+"T12:00:00"),now=new Date(today()+"T12:00:00");
+ return Math.max(1,Math.floor((now-start)/86400000)+1)
+}
+function renderFocus(){
+ const wk=weekKey(),count=(state.focus.sessions||[]).filter(s=>weekKeyOfDate(s.date)===wk).length;
+ $("#focusWeek").textContent=count+" "+(count===1?"sesión":"sesiones");
+ $("#focusLabel").textContent=focusMinutes+" minutos";
+ $("#focusTimer").textContent=`${pad(Math.floor(focusRemaining/60))}:${pad(focusRemaining%60)}`;
+}
+function renderTomorrow(){
+ const arr=state.tomorrowPlans[tomorrowISO()]||["","",""];
+ $("#tomorrowSummary").innerHTML=arr.filter(Boolean).length?arr.filter(Boolean).map((x,i)=>`<div class="tomorrow-item"><strong>${i+1}.</strong> ${esc(x)}</div>`).join(""):'<div class="empty">Aún no has planeado mañana.</div>';
+ $(".tomorrow-input").forEach((el,i)=>{if(document.activeElement!==el)el.value=arr[i]||""});
+}
+function renderFinance(){
+ const tx=state.finance.transactions||[],balance=tx.reduce((a,t)=>a+(t.type==="out"?-1:1)*Number(t.amount||0),0);
+ const wk=weekKey(),weekNet=tx.filter(t=>weekKeyOfDate(t.date)===wk).reduce((a,t)=>a+(t.type==="out"?-1:1)*Number(t.amount||0),0);
+ const goal=Math.max(1,Number(state.finance.goal)||100),pct=clamp(Math.round(Math.max(0,balance)/goal*100),0,100);
+ $("#financeBalance").textContent=money(balance);$("#financeWeek").textContent=money(weekNet);$("#financeGoalText").textContent=`${money(balance)} / ${money(goal)}`;$("#financeGoalPct").textContent=pct+"%";$("#financeGoalBar").style.width=pct+"%";
+ if(document.activeElement!==$("#financeGoal"))$("#financeGoal").value=goal;
+ $("#financeList").innerHTML=[...tx].sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,30).map(t=>`<div class="item"><div class="grow"><div class="item-title">${esc(t.reason||"Movimiento")}</div><div class="meta">${fmtDate(t.date)}</div></div><strong class="${t.type==="out"?"money-negative":"money-positive"}">${t.type==="out"?"−":"+"}${money(t.amount)}</strong><button class="mini-btn finance-delete" data-id="${t.id}">×</button></div>`).join("")||'<div class="empty">Todavía no hay movimientos.</div>';
+}
+function workoutWeekStreak(){
+ const groups={};for(const s of state.workouts.sessions||[]){const k=weekKeyOfDate(s.date);groups[k]=(groups[k]||0)+1}
+ let d=startOfWeek(),streak=0;
+ if((groups[localISO(d)]||0)<3)d.setDate(d.getDate()-7);
+ for(let i=0;i<52;i++){const k=localISO(d);if((groups[k]||0)>=3){streak++;d.setDate(d.getDate()-7)}else break}
+ return streak
+}
+function renderWorkout(){
+ const sessions=state.workouts.sessions||[],wk=weekKey(),weekly=sessions.filter(s=>weekKeyOfDate(s.date)===wk).length;
+ $("#workoutWeekCount").textContent=`${weekly}/3`;$("#workoutMetric").textContent=`${weekly}/3`;$("#workoutTotal").textContent=sessions.length;$("#workoutStreak").textContent=workoutWeekStreak();
+ $("#workoutHistory").innerHTML=[...sessions].sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,12).map(s=>`<div class="item"><div class="grow"><div class="item-title">🏋 ${esc(s.type)}</div><div class="meta">${fmtDate(s.date)}</div></div><button class="mini-btn workout-delete" data-id="${s.id}">×</button></div>`).join("")||'<div class="empty">Tu primer entrenamiento aparecerá aquí.</div>';
+}
+function renderSchool(){
+ const subs=state.school.subjects||[];
+ $("#subjectList").innerHTML=subs.map(s=>{const cur=Number(s.current)||0,tar=Number(s.target)||0,gap=tar-cur;return `<article class="card subject-card"><div><span class="kicker">${gap>0?"POR SUBIR":"META ALCANZADA"}</span><h3>${esc(s.name)}</h3><div class="subject-gap">Meta: ${tar} · ${gap>0?"faltan "+gap.toFixed(2):"vas "+Math.abs(gap).toFixed(2)+" por encima"}</div></div><div class="actions"><div class="subject-score">${cur}</div><button class="mini-btn subject-edit" data-id="${s.id}">✎</button><button class="mini-btn subject-delete" data-id="${s.id}">×</button></div></article>`}).join("")||'<div class="empty">Añade tus materias y la nota que quieres alcanzar.</div>';
+}
+function renderProjects(){
+ const statuses=[["idea","Idea"],["doing","En proceso"],["done","Terminado"]];
+ $("#projectBoard").innerHTML=statuses.map(([key,label])=>`<section class="project-col"><h3>${label}</h3>${(state.projects||[]).filter(p=>p.status===key).map(p=>`<div class="project-card"><span class="kicker">${esc(p.area)}</span><h4>${esc(p.title)}</h4><select class="project-status" data-id="${p.id}"><option value="idea" ${p.status==="idea"?"selected":""}>Idea</option><option value="doing" ${p.status==="doing"?"selected":""}>En proceso</option><option value="done" ${p.status==="done"?"selected":""}>Terminado</option></select><button class="mini-btn project-delete" data-id="${p.id}" style="margin-top:8px">Eliminar</button></div>`).join("")||'<div class="meta">Vacío</div>'}</section>`).join("");
+}
+function renderJournal(){
+ const e=state.journal.entries[today()]||{};
+ if(document.activeElement!==$("#journalGood"))$("#journalGood").value=e.good||"";
+ if(document.activeElement!==$("#journalMiss"))$("#journalMiss").value=e.miss||"";
+ if(document.activeElement!==$("#journalNext"))$("#journalNext").value=e.next||"";
+ renderTomorrow();
+ const entries=Object.entries(state.journal.entries||{}).sort((a,b)=>b[0].localeCompare(a[0])).slice(0,10);
+ $("#journalHistory").innerHTML=entries.map(([date,x])=>`<div class="item journal-entry"><div class="grow"><div class="item-title">${fmtDate(date)}</div><div class="meta"><strong>Bien:</strong> ${esc(x.good||"—")}<br><strong>Ajuste:</strong> ${esc(x.miss||"—")}<br><strong>Mañana:</strong> ${esc(x.next||"—")}</div></div></div>`).join("")||'<div class="empty">Tu primer check-in aparecerá aquí.</div>';
+}
+function renderLevel(){
+ const fullDays=Object.values(state.dailyWins.checks||{}).filter(a=>Array.isArray(a)&&a.filter(Boolean).length===3).length;
+ const balance=(state.finance.transactions||[]).reduce((a,t)=>a+(t.type==="out"?-1:1)*Number(t.amount||0),0);
+ const doneGoals=(state.goals||[]).filter(g=>g.done).length,doneProjects=(state.projects||[]).filter(p=>p.status==="done").length;
+ const points=fullDays*10+doneGoals*20+(state.workouts.sessions||[]).length*10+(state.focus.sessions||[]).length*5+(state.discipline.impulseWins||[]).length*15+Object.keys(state.journal.entries||{}).length*5+doneProjects*20+Math.floor(Math.max(0,balance)/5)*2;
+ const level=Math.floor(points/100)+1,within=points%100,titles=["Inicio","Constancia","Enfoque","Impulso","Construcción","Disciplina"];
+ $("#levelTitle").textContent=`Nivel ${level} · ${titles[Math.min(level-1,titles.length-1)]}`;$("#levelBar").style.width=within+"%";$("#levelText").textContent=`${points} puntos · ${100-within} para el siguiente nivel`;
+ const badges=[
+  ["🎯","Primera meta",doneGoals>=1],["🔥","7 días completos",fullDays>=7],["💰","$25 ahorrados",balance>=25],["🏋","10 entrenos",(state.workouts.sessions||[]).length>=10],
+  ["⏱","5 enfoques",(state.focus.sessions||[]).length>=5],["⚡","Dominé un impulso",(state.discipline.impulseWins||[]).length>=1],["🧵","Proyecto terminado",doneProjects>=1],["🌙","7 check-ins",Object.keys(state.journal.entries||{}).length>=7]
+ ];
+ $("#badgeList").innerHTML=badges.map(([icon,name,on])=>`<span class="achievement-badge ${on?"":"locked"}">${icon} ${name}</span>`).join("");
+}
+function renderDiscipline(){
+ $("#disciplineDay").textContent=`DÍA ${disciplineDay()} CONSTRUYENDO DISCIPLINA`;
+}
+
 function renderSettings(){
  $("#reminderTime").value=state.settings.reminderTime||"06:00";
  const cfg=localStorage.getItem(FIREBASE_KEY)||"";if(document.activeElement!==$("#firebaseConfig"))$("#firebaseConfig").value=cfg;
  updateCloudUI();
 }
-function renderAll(){closeWeekIfNeeded();renderDaily();renderWeekly();renderGoals();renderUpcoming();renderCalendar();renderStreaks();renderIdeas();renderStats();renderSettings()}
+function renderAll(){closeWeekIfNeeded();renderDaily();renderWeekly();renderGoals();renderUpcoming();renderCalendar();renderStreaks();renderIdeas();renderStats();renderFocus();renderFinance();renderWorkout();renderSchool();renderProjects();renderJournal();renderLevel();renderDiscipline();renderSettings()}
 
 function openGoal(g=null){
  $("#goalDialogTitle").textContent=g?"Editar meta":"Nueva meta";$("#goalId").value=g?.id||"";$("#goalTitle").value=g?.title||"";$("#goalArea").value=g?.area||"Personal";$("#goalDeadline").value=g?.deadline||"";$("#goalPriority").checked=!!g?.priority;$("#goalDialog").showModal()
@@ -308,7 +399,14 @@ document.addEventListener("click",e=>{
  if(e.target.matches(".idea-goal")){const n=state.ideas.find(x=>x.id===id);openGoal({title:n.text,area:"Personal"})}
  if(e.target.matches(".detected-goal")){const hits=JSON.parse($("#ideaAnalysis").dataset.hits||"[]");openGoal({title:hits[Number(e.target.dataset.i)],area:"Personal"})}
  if(e.target.matches(".detected-save")){const hits=JSON.parse($("#ideaAnalysis").dataset.hits||"[]");state.ideas.unshift({id:uid(),text:hits[Number(e.target.dataset.i)],date:today()});persist();toast("Idea guardada")}
+ if(e.target.matches(".finance-delete")){state.finance.transactions=state.finance.transactions.filter(x=>x.id!==id);persist()}
+ if(e.target.matches(".workout-complete")){const type=e.target.dataset.workout;if(!(state.workouts.sessions||[]).some(s=>s.date===today()&&s.type===type)){state.workouts.sessions.push({id:uid(),date:today(),type});const wt=state.weeklyTasks.find(t=>/entren/i.test(t.title));if(wt)wt.current=(Number(wt.current)||0)+1;persist();toast("Entrenamiento registrado ✓")}else toast("Ese entrenamiento ya está registrado hoy")}
+ if(e.target.matches(".workout-delete")){state.workouts.sessions=state.workouts.sessions.filter(x=>x.id!==id);persist()}
+ if(e.target.matches(".subject-delete")){state.school.subjects=state.school.subjects.filter(x=>x.id!==id);persist()}
+ if(e.target.matches(".subject-edit")){const s=state.school.subjects.find(x=>x.id===id);if(s){$("#subjectName").value=s.name;$("#subjectCurrent").value=s.current;$("#subjectTarget").value=s.target;$("#subjectAdd").dataset.edit=id;setView("school")}}
+ if(e.target.matches(".project-delete")){state.projects=state.projects.filter(x=>x.id!==id);persist()}
 });
+document.addEventListener("change",e=>{if(e.target.matches(".project-status")){const p=state.projects.find(x=>x.id===e.target.dataset.id);if(p){p.status=e.target.value;persist()}}});
 $("#newGoalBtn").onclick=()=>openGoal();$("#quickAdd").onclick=()=>openTask(null,today());$("#addDayTaskBtn").onclick=()=>openTask(null,selectedDate);$("#addWeeklyBtn").onclick=()=>openWeekly();$("#newStreakBtn").onclick=()=>$("#streakDialog").showModal();
 $("#prevMonth").onclick=()=>{calCursor.setMonth(calCursor.getMonth()-1);renderCalendar()};$("#nextMonth").onclick=()=>{calCursor.setMonth(calCursor.getMonth()+1);renderCalendar()};
 $("#goalForm").addEventListener("submit",e=>{e.preventDefault();const id=$("#goalId").value,obj={id:id||uid(),title:$("#goalTitle").value.trim(),area:$("#goalArea").value,deadline:$("#goalDeadline").value,priority:$("#goalPriority").checked,done:false,createdAt:Date.now()};if(!obj.title)return;if(id){const old=state.goals.find(g=>g.id===id);Object.assign(old,obj,{done:old.done})}else state.goals.push(obj);$("#goalDialog").close();persist()});
@@ -316,6 +414,22 @@ $("#taskForm").addEventListener("submit",e=>{e.preventDefault();const id=$("#tas
 $("#weeklyForm").addEventListener("submit",e=>{e.preventDefault();const id=$("#weeklyId").value,title=$("#weeklyTitle").value.trim(),unit=$("#weeklyUnit").value.trim()||"veces",obj={id:id||uid(),title,target:Number($("#weeklyTarget").value)||1,unit,current:0,type:(/ahorr/i.test(title)||unit==="$")?"money":undefined};if(id){const old=state.weeklyTasks.find(t=>t.id===id);Object.assign(old,obj,{current:old.current})}else state.weeklyTasks.push(obj);$("#weeklyDialog").close();persist()});
 $("#streakForm").addEventListener("submit",e=>{e.preventDefault();const title=$("#streakTitle").value.trim();if(title)state.streaks.push({id:uid(),title,dates:[]});$("#streakTitle").value="";$("#streakDialog").close();persist()});
 $("#analyzeIdeaBtn").onclick=analyzeIdea;$("#saveIdeaBtn").onclick=()=>{const text=$("#ideaText").value.trim();if(!text)return;state.ideas.unshift({id:uid(),text,date:today()});$("#ideaText").value="";$("#ideaAnalysis").innerHTML="";persist()};
+
+$("#financeAdd").onclick=()=>{const amount=Number($("#financeAmount").value),type=$("#financeType").value,reason=$("#financeReason").value.trim();if(!(amount>0))return toast("Escribe una cantidad válida");state.finance.transactions.push({id:uid(),type,amount,date:today(),reason:reason||"Movimiento"});const mt=state.weeklyTasks.find(t=>t.type==="money");if(mt)mt.current=Math.max(0,(Number(mt.current)||0)+(type==="out"?-amount:amount));$("#financeAmount").value="";$("#financeReason").value="";persist();toast("Movimiento guardado")};
+$("#financeGoalSave").onclick=()=>{const g=Number($("#financeGoal").value);if(g>0){state.finance.goal=g;persist();toast("Meta de ahorro actualizada")}};
+$("#subjectAdd").onclick=()=>{const name=$("#subjectName").value.trim(),current=Number($("#subjectCurrent").value),target=Number($("#subjectTarget").value),edit=$("#subjectAdd").dataset.edit;if(!name||!Number.isFinite(current)||!Number.isFinite(target))return toast("Completa materia, nota y meta");if(edit){const s=state.school.subjects.find(x=>x.id===edit);Object.assign(s,{name,current,target});delete $("#subjectAdd").dataset.edit}else state.school.subjects.push({id:uid(),name,current,target});$("#subjectName").value="";$("#subjectCurrent").value="";$("#subjectTarget").value="";persist()};
+$("#projectAdd").onclick=()=>{const title=$("#projectTitle").value.trim();if(!title)return;state.projects.push({id:uid(),title,area:$("#projectArea").value,status:"idea",createdAt:Date.now()});$("#projectTitle").value="";persist()};
+$("#journalSave").onclick=()=>{state.journal.entries[today()]={good:$("#journalGood").value.trim(),miss:$("#journalMiss").value.trim(),next:$("#journalNext").value.trim()};persist();toast("Check-in guardado")};
+$("#tomorrowSave").onclick=()=>{state.tomorrowPlans[tomorrowISO()]=$(".tomorrow-input").map(x=>x.value.trim());persist();toast("Mañana está planeado")};
+$("#emergencyBtn").onclick=()=>$("#emergencyDialog").showModal();
+$("#urgeStart").onclick=()=>{clearInterval(urgeInterval);urgeRemaining=10*60;$("#urgeTimer").textContent="10:00";urgeInterval=setInterval(()=>{urgeRemaining--;$("#urgeTimer").textContent=`${pad(Math.floor(urgeRemaining/60))}:${pad(urgeRemaining%60)}`;if(urgeRemaining<=0){clearInterval(urgeInterval);toast("Pasaron los 10 minutos. Decide con calma.")}},1000)};
+$("#urgeWon").onclick=()=>{clearInterval(urgeInterval);state.discipline.impulseWins.push({id:uid(),date:today(),time:new Date().toISOString()});$("#emergencyDialog").close();persist();toast("Victoria registrada ⚡")};
+$("[data-focus-min]").forEach(b=>b.onclick=()=>{clearInterval(focusInterval);focusMinutes=Number(b.dataset.focusMin);focusRemaining=focusMinutes*60;$("[data-focus-min]").forEach(x=>x.classList.toggle("active",x===b));renderFocus()});
+$("#focusStart").onclick=()=>{if(focusInterval)return;focusStartedAt=Date.now();focusInterval=setInterval(()=>{focusRemaining--;$("#focusTimer").textContent=`${pad(Math.floor(focusRemaining/60))}:${pad(focusRemaining%60)}`;if(focusRemaining<=0){clearInterval(focusInterval);focusInterval=null;state.focus.sessions.push({id:uid(),date:today(),minutes:focusMinutes});focusRemaining=focusMinutes*60;persist();toast("Sesión de enfoque completada ✓")}},1000)};
+$("#focusPause").onclick=()=>{clearInterval(focusInterval);focusInterval=null;renderFocus()};
+$("#focusReset").onclick=()=>{clearInterval(focusInterval);focusInterval=null;focusRemaining=focusMinutes*60;renderFocus()};
+$("#schoolImportInfo").onclick=()=>alert("School Access puede automatizarse si contamos con un método permitido de acceso a los datos (API, exportación o una integración segura). No guardaremos tu contraseña de School Access dentro del código público de GitHub.");
+
 $("#calendarReminderBtn").onclick=createICS;$("#testNotificationBtn").onclick=()=>testNotification().catch(showError);
 $("#reminderTime").onchange=()=>{state.settings.reminderTime=$("#reminderTime").value;persist()};
 $("#saveFirebaseBtn").onclick=()=>{try{parseFirebaseConfig($("#firebaseConfig").value);localStorage.setItem(FIREBASE_KEY,$("#firebaseConfig").value.trim());toast("Configuración guardada")}catch(e){showError(e)}};
