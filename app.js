@@ -1,6 +1,15 @@
 const APP_KEY="vertice_disciplina_v2";
 const OLD_KEY="vertice_disciplina_v1";
 const FIREBASE_KEY="vertice_firebase_config";
+const DEFAULT_FIREBASE_CONFIG={
+  apiKey:"AIzaSyA6IghLCgdzOgKn5E4eoP4U8wwjhziF3Ls",
+  authDomain:"vertice-disciplina.firebaseapp.com",
+  projectId:"vertice-disciplina",
+  storageBucket:"vertice-disciplina.firebasestorage.app",
+  messagingSenderId:"956388248617",
+  appId:"1:956388248617:web:c0dc14598be44287b6e038",
+  measurementId:"G-RL3BBBTVP2"
+};
 const SITE_URL="https://matimora356.github.io/Vertice-disciplina/";
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
@@ -41,7 +50,7 @@ const freshState=()=>({
  achievements:[],
  finance:{goal:100,transactions:[]},
  workouts:{sessions:[]},
- school:{subjects:[]},
+ school:{subjects:[],assignments:[],snapshots:{},lastSync:null},
  projects:[],
  focus:{sessions:[]},
  journal:{entries:{}},
@@ -86,7 +95,7 @@ function normalize(s){
  return {...n,...s,meta:{...n.meta,...s.meta},dailyWins:{...n.dailyWins,...s.dailyWins},history:{...n.history,...s.history},settings:{...n.settings,...s.settings},
  finance:{...n.finance,...(s.finance||{}),transactions:Array.isArray(s.finance?.transactions)?s.finance.transactions:[]},
  workouts:{...n.workouts,...(s.workouts||{}),sessions:Array.isArray(s.workouts?.sessions)?s.workouts.sessions:[]},
- school:{...n.school,...(s.school||{}),subjects:Array.isArray(s.school?.subjects)?s.school.subjects:[]},
+ school:{...n.school,...(s.school||{}),subjects:Array.isArray(s.school?.subjects)?s.school.subjects:[],assignments:Array.isArray(s.school?.assignments)?s.school.assignments:[],snapshots:(s.school?.snapshots&&typeof s.school.snapshots==="object")?s.school.snapshots:{},lastSync:s.school?.lastSync||null},
  focus:{...n.focus,...(s.focus||{}),sessions:Array.isArray(s.focus?.sessions)?s.focus.sessions:[]},
  journal:{...n.journal,...(s.journal||{}),entries:{...n.journal.entries,...(s.journal?.entries||{})}},
  tomorrowPlans:{...n.tomorrowPlans,...(s.tomorrowPlans||{})},
@@ -99,6 +108,7 @@ let cloud={ready:false,user:null,db:null,auth:null,mods:null,unsub:null,applying
 let calCursor=new Date();calCursor.setDate(1);calCursor.setHours(12,0,0,0);
 let selectedDate=today();
 let deferredInstall=null;
+let schoolExtensionDetected=false;
 let focusMinutes=25,focusRemaining=25*60,focusInterval=null,focusStartedAt=null;
 let urgeRemaining=10*60,urgeInterval=null;
 
@@ -127,7 +137,13 @@ function scheduleCloudSave(){
  cloud.timer=setTimeout(()=>pushCloud().catch(showError),700);
 }
 function toast(msg){const el=$("#toast");el.textContent=msg;el.classList.add("show");setTimeout(()=>el.classList.remove("show"),1800)}
-function showError(e){console.error(e);toast(e?.message||"Ocurrió un error")}
+function showError(e){
+ console.error(e);
+ const msg=e?.message||"Ocurrió un error";
+ toast(msg);
+ const st=$("#cloudStatus");
+ if(st){st.textContent="Error: "+msg;st.className="status bad"}
+}
 
 function setView(id){
  $$(".view").forEach(v=>v.classList.toggle("active",v.id===id));
@@ -259,6 +275,12 @@ function renderWorkout(){
 }
 function renderSchool(){
  const subs=state.school.subjects||[];
+ const st=$("#schoolSyncStatus");
+ if(st){
+   if(state.school.lastSync){st.textContent="School Access sincronizado · "+new Date(state.school.lastSync).toLocaleString("es-PA");st.className="status good"}
+   else if(schoolExtensionDetected){st.textContent="Extensión detectada ✓ · abre Notas/Boletín o Asignaciones en School Access.";st.className="status good"}
+   else{st.textContent="Extensión no detectada todavía. Si acabas de instalarla, recarga esta página.";st.className="status"}
+ }
  $("#subjectList").innerHTML=subs.map(s=>{const cur=Number(s.current)||0,tar=Number(s.target)||0,gap=tar-cur;return `<article class="card subject-card"><div><span class="kicker">${gap>0?"POR SUBIR":"META ALCANZADA"}</span><h3>${esc(s.name)}</h3><div class="subject-gap">Meta: ${tar} · ${gap>0?"faltan "+gap.toFixed(2):"vas "+Math.abs(gap).toFixed(2)+" por encima"}</div></div><div class="actions"><div class="subject-score">${cur}</div><button class="mini-btn subject-edit" data-id="${s.id}">✎</button><button class="mini-btn subject-delete" data-id="${s.id}">×</button></div></article>`}).join("")||'<div class="empty">Añade tus materias y la nota que quieres alcanzar.</div>';
 }
 function renderProjects(){
@@ -293,7 +315,8 @@ function renderDiscipline(){
 
 function renderSettings(){
  $("#reminderTime").value=state.settings.reminderTime||"06:00";
- const cfg=localStorage.getItem(FIREBASE_KEY)||"";if(document.activeElement!==$("#firebaseConfig"))$("#firebaseConfig").value=cfg;
+ const cfg=localStorage.getItem(FIREBASE_KEY)||JSON.stringify(DEFAULT_FIREBASE_CONFIG,null,2);
+ if(document.activeElement!==$("#firebaseConfig"))$("#firebaseConfig").value=cfg;
  updateCloudUI();
 }
 function renderAll(){closeWeekIfNeeded();renderDaily();renderWeekly();renderGoals();renderUpcoming();renderCalendar();renderStreaks();renderIdeas();renderStats();renderFocus();renderFinance();renderWorkout();renderSchool();renderProjects();renderJournal();renderLevel();renderDiscipline();renderSettings()}
@@ -336,9 +359,9 @@ function parseFirebaseConfig(raw){
  try{return JSON.parse(text)}catch{throw new Error("No pude leer la configuración. Pega el bloque firebaseConfig completo que te da Firebase.")}
 }
 async function initCloud(){
- const raw=localStorage.getItem(FIREBASE_KEY);if(!raw)throw new Error("Primero pega y guarda la configuración de Firebase.");
- const cfg=parseFirebaseConfig(raw)
- $("#cloudStatus").textContent="Conectando...";
+ const raw=localStorage.getItem(FIREBASE_KEY);
+ const cfg=raw?parseFirebaseConfig(raw):DEFAULT_FIREBASE_CONFIG;
+ const st=$("#cloudStatus");if(st){st.textContent="Conectando con Firebase…";st.className="status"}
  const [appM,authM,fsM]=await Promise.all([
    import("https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js"),
    import("https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js"),
@@ -428,15 +451,44 @@ $("[data-focus-min]").forEach(b=>b.onclick=()=>{clearInterval(focusInterval);foc
 $("#focusStart").onclick=()=>{if(focusInterval)return;focusStartedAt=Date.now();focusInterval=setInterval(()=>{focusRemaining--;$("#focusTimer").textContent=`${pad(Math.floor(focusRemaining/60))}:${pad(focusRemaining%60)}`;if(focusRemaining<=0){clearInterval(focusInterval);focusInterval=null;state.focus.sessions.push({id:uid(),date:today(),minutes:focusMinutes});focusRemaining=focusMinutes*60;persist();toast("Sesión de enfoque completada ✓")}},1000)};
 $("#focusPause").onclick=()=>{clearInterval(focusInterval);focusInterval=null;renderFocus()};
 $("#focusReset").onclick=()=>{clearInterval(focusInterval);focusInterval=null;focusRemaining=focusMinutes*60;renderFocus()};
-$("#schoolImportInfo").onclick=()=>alert("School Access puede automatizarse si contamos con un método permitido de acceso a los datos (API, exportación o una integración segura). No guardaremos tu contraseña de School Access dentro del código público de GitHub.");
+$("#schoolImportInfo").onclick=()=>alert("En Brave: abre brave://extensions → Modo desarrollador → Cargar descomprimida y selecciona la carpeta de la extensión. Luego inicia sesión normalmente en School Access, visita Notas/Boletín o Asignaciones y vuelve a Vértice.");
 
 $("#calendarReminderBtn").onclick=createICS;$("#testNotificationBtn").onclick=()=>testNotification().catch(showError);
 $("#reminderTime").onchange=()=>{state.settings.reminderTime=$("#reminderTime").value;persist()};
-$("#saveFirebaseBtn").onclick=()=>{try{parseFirebaseConfig($("#firebaseConfig").value);localStorage.setItem(FIREBASE_KEY,$("#firebaseConfig").value.trim());toast("Configuración guardada")}catch(e){showError(e)}};
-$("#connectFirebaseBtn").onclick=()=>initCloud().catch(showError);$("#signInBtn").onclick=()=>signIn(false).catch(showError);$("#registerBtn").onclick=()=>signIn(true).catch(showError);$("#signOutBtn").onclick=()=>signOutCloud().catch(showError);
+$("#saveFirebaseBtn").onclick=()=>{try{const raw=$("#firebaseConfig").value.trim()||JSON.stringify(DEFAULT_FIREBASE_CONFIG);parseFirebaseConfig(raw);localStorage.setItem(FIREBASE_KEY,raw);toast("Configuración guardada ✓")}catch(e){showError(e)}};
+$("#connectFirebaseBtn").onclick=async()=>{try{await initCloud();toast("Firebase conectado ✓")}catch(e){showError(e)}};
+$("#signInBtn").onclick=()=>signIn(false).catch(showError);$("#registerBtn").onclick=()=>signIn(true).catch(showError);$("#signOutBtn").onclick=()=>signOutCloud().catch(showError);
 $("#exportBtn").onclick=exportData;$("#importInput").onchange=e=>{const f=e.target.files?.[0];if(f)importData(f).catch(showError)};
 window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredInstall=e;$("#installBtn").hidden=false});$("#installBtn").onclick=async()=>{if(deferredInstall){deferredInstall.prompt();await deferredInstall.userChoice;deferredInstall=null;$("#installBtn").hidden=true}};
+window.addEventListener("message",e=>{
+ if(e.source!==window||e.data?.source!=="VERTICE_SCHOOL_ACCESS_EXTENSION")return;
+ schoolExtensionDetected=true;
+ const p=e.data.payload||{},snaps=p.snapshots||{};
+ let changed=false;
+ state.school.snapshots={...(state.school.snapshots||{}),...snaps};
+ if(p.lastSync&&p.lastSync!==state.school.lastSync){state.school.lastSync=p.lastSync;changed=true}
+ const gradeRows=Object.values(snaps).flatMap(s=>Array.isArray(s?.grades)?s.grades:[]);
+ for(const g of gradeRows){
+   if(!g?.subject)continue;
+   const name=String(g.subject).trim(),current=Number(g.periodAverage);
+   if(!name||!Number.isFinite(current))continue;
+   const existing=(state.school.subjects||[]).find(s=>String(s.name).trim().toLowerCase()===name.toLowerCase());
+   if(existing){if(existing.current!==current){existing.current=current;changed=true}}
+   else{state.school.subjects.push({id:uid(),name,current,target:5,source:"school-access"});changed=true}
+ }
+ const ass=Object.values(snaps).flatMap(s=>Array.isArray(s?.assignments)?s.assignments:[]);
+ for(const a of ass){
+   if(!a?.date||!a?.title)continue;
+   const key=[a.date,a.subject,a.title].join("|").toLowerCase();
+   if(!(state.school.assignments||[]).some(x=>x.key===key)){state.school.assignments.push({...a,key});changed=true}
+   if(!(state.calendarTasks||[]).some(x=>x.schoolKey===key)){
+     state.calendarTasks.push({id:uid(),title:[a.subject,a.title].filter(Boolean).join(" · "),date:a.date,area:"Colegio",done:false,schoolKey:key,detail:a.detail||"",source:"school-access"});changed=true
+   }
+ }
+ if(changed){persist();toast("School Access sincronizado ✓")}else renderSchool();
+});
+
 if("serviceWorker"in navigator)navigator.serviceWorker.register("./sw.js").catch(console.error);
 $("#todayLabel").textContent=new Intl.DateTimeFormat("es-PA",{weekday:"long",day:"numeric",month:"long"}).format(new Date());
 closeWeekIfNeeded();renderAll();
-if(localStorage.getItem(FIREBASE_KEY))initCloud().catch(()=>{});
+initCloud().catch(showError);
