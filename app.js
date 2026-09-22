@@ -1,6 +1,15 @@
 const APP_KEY="vertice_disciplina_v2";
 const OLD_KEY="vertice_disciplina_v1";
 const FIREBASE_KEY="vertice_firebase_config";
+const DEFAULT_FIREBASE_CONFIG={
+  apiKey:"AIzaSyA6IghLCgdzOgKn5E4eoP4U8wwjhziF3Ls",
+  authDomain:"vertice-disciplina.firebaseapp.com",
+  projectId:"vertice-disciplina",
+  storageBucket:"vertice-disciplina.firebasestorage.app",
+  messagingSenderId:"956388248617",
+  appId:"1:956388248617:web:c0dc14598be44287b6e038",
+  measurementId:"G-RL3BBBTVP2"
+};
 const SITE_URL="https://matimora356.github.io/Vertice-disciplina/";
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
@@ -124,7 +133,7 @@ function persist(render=true){
 function scheduleCloudSave(){
  if(!cloud.user||!cloud.db||cloud.applying)return;
  clearTimeout(cloud.timer);
- cloud.timer=setTimeout(()=>pushCloud().catch(showError),700);
+ cloud.timer=setTimeout(()=>pushCloud().catch(showCloudError),700);
 }
 function toast(msg){const el=$("#toast");el.textContent=msg;el.classList.add("show");setTimeout(()=>el.classList.remove("show"),1800)}
 function showError(e){console.error(e);toast(e?.message||"Ocurrió un error")}
@@ -235,7 +244,7 @@ function renderFocus(){
 function renderTomorrow(){
  const arr=state.tomorrowPlans[tomorrowISO()]||["","",""];
  $("#tomorrowSummary").innerHTML=arr.filter(Boolean).length?arr.filter(Boolean).map((x,i)=>`<div class="tomorrow-item"><strong>${i+1}.</strong> ${esc(x)}</div>`).join(""):'<div class="empty">Aún no has planeado mañana.</div>';
- $(".tomorrow-input").forEach((el,i)=>{if(document.activeElement!==el)el.value=arr[i]||""});
+ $$(".tomorrow-input").forEach((el,i)=>{if(document.activeElement!==el)el.value=arr[i]||""});
 }
 function renderFinance(){
  const tx=state.finance.transactions||[],balance=tx.reduce((a,t)=>a+(t.type==="out"?-1:1)*Number(t.amount||0),0);
@@ -293,7 +302,7 @@ function renderDiscipline(){
 
 function renderSettings(){
  $("#reminderTime").value=state.settings.reminderTime||"06:00";
- const cfg=localStorage.getItem(FIREBASE_KEY)||"";if(document.activeElement!==$("#firebaseConfig"))$("#firebaseConfig").value=cfg;
+ const cfg=localStorage.getItem(FIREBASE_KEY)||JSON.stringify(DEFAULT_FIREBASE_CONFIG,null,2);if(document.activeElement!==$("#firebaseConfig"))$("#firebaseConfig").value=cfg;
  updateCloudUI();
 }
 function renderAll(){closeWeekIfNeeded();renderDaily();renderWeekly();renderGoals();renderUpcoming();renderCalendar();renderStreaks();renderIdeas();renderStats();renderFocus();renderFinance();renderWorkout();renderSchool();renderProjects();renderJournal();renderLevel();renderDiscipline();renderSettings()}
@@ -335,19 +344,73 @@ function parseFirebaseConfig(raw){
  text=text.replace(/([,{]\s*)([A-Za-z_$][\w$]*)(\s*:)/g,'$1"$2"$3').replace(/'/g,'"').replace(/,\s*}/g,'}');
  try{return JSON.parse(text)}catch{throw new Error("No pude leer la configuración. Pega el bloque firebaseConfig completo que te da Firebase.")}
 }
+let cloudInitPromise=null;
+let authBusy=false;
+let cloudMessage="";
+let cloudHasError=false;
+function setCloudStatus(message,error=false){
+ cloudMessage=message;
+ cloudHasError=error;
+ $("#cloudStatus").textContent=message;
+ $("#cloudStatus").className="status "+(error?"bad":"");
+}
+function showCloudError(error){
+ console.error(error);
+ const messages={
+  "auth/invalid-credential":"Correo o contraseña incorrectos.",
+  "auth/wrong-password":"Correo o contraseña incorrectos.",
+  "auth/user-not-found":"Correo o contraseña incorrectos.",
+  "auth/invalid-email":"Escribe un correo válido.",
+  "auth/email-already-in-use":"Este correo ya tiene una cuenta. Usa Entrar.",
+  "auth/weak-password":"La contraseña debe tener al menos 6 caracteres.",
+  "auth/network-request-failed":"No se pudo conectar. Revisa tu conexión e inténtalo otra vez.",
+  "auth/too-many-requests":"Demasiados intentos. Espera unos minutos y vuelve a intentarlo.",
+  "auth/operation-not-allowed":"El acceso con correo y contraseña no está habilitado en Firebase.",
+  "auth/invalid-api-key":"La configuración de Firebase contiene una API key inválida.",
+  "permission-denied":"La sesión está iniciada, pero Firebase no permite sincronizar los datos."
+ };
+ setCloudStatus(messages[error?.code]||error?.message||"No se pudo conectar con Firebase.",true);
+}
+function validateFirebaseConfig(raw){
+ const cfg=parseFirebaseConfig(raw);
+ if(!cfg||["apiKey","authDomain","projectId","appId"].some(key=>typeof cfg[key]!=="string"||!cfg[key].trim()))
+  throw new Error("La configuración debe incluir apiKey, authDomain, projectId y appId.");
+ return cfg;
+}
 async function initCloud(){
- const raw=localStorage.getItem(FIREBASE_KEY);if(!raw)throw new Error("Primero pega y guarda la configuración de Firebase.");
- const cfg=parseFirebaseConfig(raw)
- $("#cloudStatus").textContent="Conectando...";
- const [appM,authM,fsM]=await Promise.all([
-   import("https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js"),
-   import("https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js"),
-   import("https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js")
- ]);
- const app=appM.getApps().length?appM.getApp():appM.initializeApp(cfg);
- cloud.auth=authM.getAuth(app);cloud.db=fsM.getFirestore(app);cloud.mods={authM,fsM};cloud.ready=true;
- authM.onAuthStateChanged(cloud.auth,async user=>{cloud.user=user||null;if(user)await startCloudSync();else{if(cloud.unsub)cloud.unsub();cloud.unsub=null;updateCloudUI()}});
- updateCloudUI();toast("Firebase conectado");
+ if(cloud.ready)return;
+ if(cloudInitPromise)return cloudInitPromise;
+ cloudInitPromise=(async()=>{
+  const cfg=validateFirebaseConfig(localStorage.getItem(FIREBASE_KEY)||JSON.stringify(DEFAULT_FIREBASE_CONFIG));
+  setCloudStatus("Conectando con Firebase…");
+  let timeout;
+  let modules;
+  try{
+   modules=await Promise.race([
+    Promise.all([
+     import("https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js"),
+     import("https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js"),
+     import("https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js")
+    ]),
+    new Promise((_,reject)=>{timeout=setTimeout(()=>reject(new Error("Firebase tarda demasiado en cargar. Revisa tu conexión y pulsa Conectar nube para reintentar.")),15000)})
+   ]);
+  }finally{clearTimeout(timeout)}
+  const [appM,authM,fsM]=modules;
+  const app=appM.getApps().length?appM.getApp():appM.initializeApp(cfg);
+  cloud.auth=authM.getAuth(app);cloud.db=fsM.getFirestore(app);cloud.mods={authM,fsM};cloud.ready=true;
+  if(!cloudHasError){cloudMessage="";updateCloudUI()}
+  authM.onAuthStateChanged(cloud.auth,async user=>{
+   cloud.user=user||null;
+   if(user){
+    setCloudStatus("Sesión iniciada. Sincronizando datos…");
+    try{await startCloudSync()}catch(error){showCloudError(error)}
+   }else{
+    if(cloud.unsub)cloud.unsub();cloud.unsub=null;
+    if(!authBusy&&!cloudHasError){cloudMessage="";updateCloudUI()}
+   }
+  },showCloudError);
+ })();
+ try{await cloudInitPromise}finally{cloudInitPromise=null}
 }
 async function startCloudSync(){
  const {fsM}=cloud.mods,ref=fsM.doc(cloud.db,"users",cloud.user.uid,"data","state");
@@ -357,21 +420,34 @@ async function startCloudSync(){
    if(remote?.meta?.lastModified>state.meta.lastModified){cloud.applying=true;state=normalize(remote);localStorage.setItem(APP_KEY,JSON.stringify(state));renderAll();cloud.applying=false}
    else await fsM.setDoc(ref,{state},{merge:false});
  }else await fsM.setDoc(ref,{state},{merge:false});
- if(cloud.unsub)cloud.unsub();
- cloud.unsub=fsM.onSnapshot(ref,s=>{const remote=s.data()?.state;if(!remote||remote.meta?.lastModified<=state.meta.lastModified)return;cloud.applying=true;state=normalize(remote);localStorage.setItem(APP_KEY,JSON.stringify(state));renderAll();cloud.applying=false});
+ if(cloud.unsub)cloud.unsub(); cloudMessage="";
+ cloud.unsub=fsM.onSnapshot(ref,s=>{const remote=s.data()?.state;if(!remote||remote.meta?.lastModified<=state.meta.lastModified)return;cloud.applying=true;state=normalize(remote);localStorage.setItem(APP_KEY,JSON.stringify(state));renderAll();cloud.applying=false},showCloudError);
  updateCloudUI();
 }
 async function pushCloud(){if(!cloud.user||!cloud.db)return;const {fsM}=cloud.mods,ref=fsM.doc(cloud.db,"users",cloud.user.uid,"data","state");await fsM.setDoc(ref,{state},{merge:false})}
 async function signIn(register=false){
- if(!cloud.ready)await initCloud();
- const email=$("#authEmail").value.trim(),pass=$("#authPassword").value;if(!email||pass.length<6)throw new Error("Escribe un correo y una contraseña de al menos 6 caracteres.");
- const {authM}=cloud.mods;
- if(register)await authM.createUserWithEmailAndPassword(cloud.auth,email,pass);else await authM.signInWithEmailAndPassword(cloud.auth,email,pass);
- toast(register?"Cuenta creada":"Sesión iniciada")
+ if(authBusy)return;
+ const email=$("#authEmail").value.trim(),pass=$("#authPassword").value;
+ if(!email||!$("#authEmail").checkValidity())throw new Error("Escribe un correo válido.");
+ if(!pass||(register&&pass.length<6))throw new Error(register?"Escribe una contraseña de al menos 6 caracteres.":"Escribe tu contraseña.");
+ authBusy=true;
+ const buttons=[$("#signInBtn"),$("#registerBtn"),$("#connectFirebaseBtn")];
+ buttons.forEach(button=>button.disabled=true);
+ try{
+  setCloudStatus(register?"Creando cuenta…":"Iniciando sesión…");
+  await initCloud();
+  setCloudStatus(register?"Creando cuenta…":"Iniciando sesión…");
+  const {authM}=cloud.mods;
+  if(register)await authM.createUserWithEmailAndPassword(cloud.auth,email,pass);
+  else await authM.signInWithEmailAndPassword(cloud.auth,email,pass);
+  $("#authPassword").value="";
+  toast(register?"Cuenta creada":"Sesión iniciada");
+ }finally{authBusy=false;buttons.forEach(button=>button.disabled=false)}
 }
 async function signOutCloud(){if(cloud.auth)await cloud.mods.authM.signOut(cloud.auth);toast("Sesión cerrada")}
 function updateCloudUI(){
  const online=!!cloud.user;$("#cloudDot").classList.toggle("online",online);$("#cloudLabel").textContent=online?"Sincronizado":"Solo este dispositivo";
+ if(cloudMessage)return;
  $("#cloudStatus").textContent=online?`Conectado como ${cloud.user.email||"usuario"}`:cloud.ready?"Firebase conectado. Inicia sesión.":"Sin conectar.";
  $("#cloudStatus").className="status "+(online?"good":"");
 }
@@ -420,11 +496,11 @@ $("#financeGoalSave").onclick=()=>{const g=Number($("#financeGoal").value);if(g>
 $("#subjectAdd").onclick=()=>{const name=$("#subjectName").value.trim(),current=Number($("#subjectCurrent").value),target=Number($("#subjectTarget").value),edit=$("#subjectAdd").dataset.edit;if(!name||!Number.isFinite(current)||!Number.isFinite(target))return toast("Completa materia, nota y meta");if(edit){const s=state.school.subjects.find(x=>x.id===edit);Object.assign(s,{name,current,target});delete $("#subjectAdd").dataset.edit}else state.school.subjects.push({id:uid(),name,current,target});$("#subjectName").value="";$("#subjectCurrent").value="";$("#subjectTarget").value="";persist()};
 $("#projectAdd").onclick=()=>{const title=$("#projectTitle").value.trim();if(!title)return;state.projects.push({id:uid(),title,area:$("#projectArea").value,status:"idea",createdAt:Date.now()});$("#projectTitle").value="";persist()};
 $("#journalSave").onclick=()=>{state.journal.entries[today()]={good:$("#journalGood").value.trim(),miss:$("#journalMiss").value.trim(),next:$("#journalNext").value.trim()};persist();toast("Check-in guardado")};
-$("#tomorrowSave").onclick=()=>{state.tomorrowPlans[tomorrowISO()]=$(".tomorrow-input").map(x=>x.value.trim());persist();toast("Mañana está planeado")};
+$("#tomorrowSave").onclick=()=>{state.tomorrowPlans[tomorrowISO()]=$$(".tomorrow-input").map(x=>x.value.trim());persist();toast("Mañana está planeado")};
 $("#emergencyBtn").onclick=()=>$("#emergencyDialog").showModal();
 $("#urgeStart").onclick=()=>{clearInterval(urgeInterval);urgeRemaining=10*60;$("#urgeTimer").textContent="10:00";urgeInterval=setInterval(()=>{urgeRemaining--;$("#urgeTimer").textContent=`${pad(Math.floor(urgeRemaining/60))}:${pad(urgeRemaining%60)}`;if(urgeRemaining<=0){clearInterval(urgeInterval);toast("Pasaron los 10 minutos. Decide con calma.")}},1000)};
 $("#urgeWon").onclick=()=>{clearInterval(urgeInterval);state.discipline.impulseWins.push({id:uid(),date:today(),time:new Date().toISOString()});$("#emergencyDialog").close();persist();toast("Victoria registrada ⚡")};
-$("[data-focus-min]").forEach(b=>b.onclick=()=>{clearInterval(focusInterval);focusMinutes=Number(b.dataset.focusMin);focusRemaining=focusMinutes*60;$("[data-focus-min]").forEach(x=>x.classList.toggle("active",x===b));renderFocus()});
+$$("[data-focus-min]").forEach(b=>b.onclick=()=>{clearInterval(focusInterval);focusMinutes=Number(b.dataset.focusMin);focusRemaining=focusMinutes*60;$$("[data-focus-min]").forEach(x=>x.classList.toggle("active",x===b));renderFocus()});
 $("#focusStart").onclick=()=>{if(focusInterval)return;focusStartedAt=Date.now();focusInterval=setInterval(()=>{focusRemaining--;$("#focusTimer").textContent=`${pad(Math.floor(focusRemaining/60))}:${pad(focusRemaining%60)}`;if(focusRemaining<=0){clearInterval(focusInterval);focusInterval=null;state.focus.sessions.push({id:uid(),date:today(),minutes:focusMinutes});focusRemaining=focusMinutes*60;persist();toast("Sesión de enfoque completada ✓")}},1000)};
 $("#focusPause").onclick=()=>{clearInterval(focusInterval);focusInterval=null;renderFocus()};
 $("#focusReset").onclick=()=>{clearInterval(focusInterval);focusInterval=null;focusRemaining=focusMinutes*60;renderFocus()};
@@ -432,11 +508,11 @@ $("#schoolImportInfo").onclick=()=>alert("School Access puede automatizarse si c
 
 $("#calendarReminderBtn").onclick=createICS;$("#testNotificationBtn").onclick=()=>testNotification().catch(showError);
 $("#reminderTime").onchange=()=>{state.settings.reminderTime=$("#reminderTime").value;persist()};
-$("#saveFirebaseBtn").onclick=()=>{try{parseFirebaseConfig($("#firebaseConfig").value);localStorage.setItem(FIREBASE_KEY,$("#firebaseConfig").value.trim());toast("Configuración guardada")}catch(e){showError(e)}};
-$("#connectFirebaseBtn").onclick=()=>initCloud().catch(showError);$("#signInBtn").onclick=()=>signIn(false).catch(showError);$("#registerBtn").onclick=()=>signIn(true).catch(showError);$("#signOutBtn").onclick=()=>signOutCloud().catch(showError);
+$("#saveFirebaseBtn").onclick=()=>{try{const cfg=validateFirebaseConfig($("#firebaseConfig").value);localStorage.setItem(FIREBASE_KEY,JSON.stringify(cfg));setCloudStatus(cloud.ready?"Configuración guardada. Recarga la página para aplicarla.":"Configuración guardada. Pulsa Conectar nube.");}catch(e){showCloudError(e)}};
+$("#connectFirebaseBtn").onclick=()=>initCloud().catch(showCloudError);$("#signInBtn").onclick=()=>signIn(false).catch(showCloudError);$("#registerBtn").onclick=()=>signIn(true).catch(showCloudError);$("#signOutBtn").onclick=()=>signOutCloud().catch(showCloudError);
 $("#exportBtn").onclick=exportData;$("#importInput").onchange=e=>{const f=e.target.files?.[0];if(f)importData(f).catch(showError)};
 window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredInstall=e;$("#installBtn").hidden=false});$("#installBtn").onclick=async()=>{if(deferredInstall){deferredInstall.prompt();await deferredInstall.userChoice;deferredInstall=null;$("#installBtn").hidden=true}};
 if("serviceWorker"in navigator)navigator.serviceWorker.register("./sw.js").catch(console.error);
 $("#todayLabel").textContent=new Intl.DateTimeFormat("es-PA",{weekday:"long",day:"numeric",month:"long"}).format(new Date());
 closeWeekIfNeeded();renderAll();
-if(localStorage.getItem(FIREBASE_KEY))initCloud().catch(()=>{});
+initCloud().catch(showCloudError);

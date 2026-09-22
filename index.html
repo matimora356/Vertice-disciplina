@@ -254,7 +254,7 @@
               <input id="authPassword" type="password" placeholder="Contraseña" autocomplete="current-password" />
               <div class="row"><button class="primary" id="signInBtn">Entrar</button><button class="secondary" id="registerBtn">Crear cuenta</button><button class="danger" id="signOutBtn">Salir</button></div>
             </div>
-            <p class="status" id="cloudStatus">Sin conectar.</p>
+            <p class="status" id="cloudStatus" role="status" aria-live="polite">Sin conectar.</p>
           </article>
 
           <article class="card">
@@ -337,6 +337,6 @@
   </dialog>
 
   <div id="toast" class="toast"></div>
-  <script type="module" src="./app.js"></script>
+  <script type="module" src="./app.js?v=4-login-fix"></script>
 </body>
 </html>
