@@ -25,8 +25,13 @@
         <button class="nav-btn active" data-view="home">⌂ <span>Inicio</span></button>
         <button class="nav-btn" data-view="goals">◎ <span>Metas</span></button>
         <button class="nav-btn" data-view="calendar">▦ <span>Calendario</span></button>
+        <button class="nav-btn" data-view="workout">🏋 <span>Entreno</span></button>
+        <button class="nav-btn" data-view="finance">◈ <span>Dinero</span></button>
+        <button class="nav-btn" data-view="school">▤ <span>Colegio</span></button>
+        <button class="nav-btn" data-view="projects">◇ <span>Proyectos</span></button>
         <button class="nav-btn" data-view="streaks">🔥 <span>Rachas</span></button>
         <button class="nav-btn" data-view="ideas">✦ <span>Ideas</span></button>
+        <button class="nav-btn" data-view="journal">☾ <span>Diario</span></button>
         <button class="nav-btn" data-view="stats">↗ <span>Progreso</span></button>
         <button class="nav-btn" data-view="settings">⚙ <span>Ajustes</span></button>
       </nav>
@@ -48,11 +53,25 @@
       <section id="home" class="view active">
         <div class="hero card">
           <div>
-            <span class="kicker">ENFOQUE DEL DÍA</span>
+            <span class="kicker" id="disciplineDay">DÍA 1 CONSTRUYENDO DISCIPLINA</span>
             <h2>Haz lo que dijiste que ibas a hacer.</h2>
             <p>No necesitas ganar el mes hoy. Solo cumple tus tres victorias.</p>
+            <div class="row" style="margin-top:14px"><button class="secondary" id="emergencyBtn">⚡ No romper la disciplina</button></div>
           </div>
           <div class="ring" id="todayRing"><span id="todayPct">0%</span></div>
+        </div>
+
+        <div class="grid two">
+          <article class="card focus-card">
+            <div class="section-head"><div><span class="kicker">MODO ENFOQUE</span><h3 id="focusLabel">25 minutos</h3></div><span class="badge" id="focusWeek">0 sesiones</span></div>
+            <div class="focus-timer" id="focusTimer">25:00</div>
+            <div class="chips" id="focusPresets"><button class="chip active" data-focus-min="25">25 min</button><button class="chip" data-focus-min="45">45 min</button><button class="chip" data-focus-min="60">60 min</button></div>
+            <div class="row"><button class="primary" id="focusStart">Empezar</button><button class="secondary" id="focusPause">Pausa</button><button class="secondary" id="focusReset">Reiniciar</button></div>
+          </article>
+          <article class="card">
+            <div class="section-head"><div><span class="kicker">MAÑANA</span><h3>Tres prioridades</h3></div><button class="text-btn nav-btn" data-view="journal">Planear</button></div>
+            <div id="tomorrowSummary" class="stack compact"></div>
+          </article>
         </div>
 
         <div class="grid two">
@@ -106,6 +125,58 @@
         </div>
       </section>
 
+      <section id="workout" class="view">
+        <div class="page-head"><p>3 entrenamientos por semana. Técnica, constancia y descanso.</p><span class="badge" id="workoutWeekCount">0/3</span></div>
+        <div class="grid three">
+          <article class="metric card"><span class="kicker">SEMANA</span><strong id="workoutMetric">0/3</strong><small>entrenamientos</small></article>
+          <article class="metric card"><span class="kicker">TOTAL</span><strong id="workoutTotal">0</strong><small>sesiones registradas</small></article>
+          <article class="metric card"><span class="kicker">RACHA</span><strong id="workoutStreak">0</strong><small>semanas cumpliendo 3</small></article>
+        </div>
+        <div class="grid three workout-grid">
+          <article class="card"><span class="kicker">LUNES · FUERZA A</span><h3>Pecho, piernas y abdomen</h3><ul class="routine"><li>Sentadillas · 3×8–15</li><li>Flexiones · 3×5–12</li><li>Puente de glúteos · 3×10–15</li><li>Plancha · 3×20–40 s</li></ul><button class="primary full workout-complete" data-workout="Fuerza A">Completar sesión</button></article>
+          <article class="card"><span class="kicker">MIÉRCOLES · FUERZA B</span><h3>Espalda, piernas y brazos</h3><ul class="routine"><li>Zancadas · 3×8–12/pierna</li><li>Remo con mochila · 3×8–15</li><li>Flexiones · 3×8–12</li><li>Abdominales · 3×10–15</li></ul><button class="primary full workout-complete" data-workout="Fuerza B">Completar sesión</button></article>
+          <article class="card"><span class="kicker">VIERNES · FULL BODY</span><h3>Cuerpo completo</h3><ul class="routine"><li>10 sentadillas</li><li>8 flexiones</li><li>10 zancadas/pierna</li><li>10 remos + 30 s plancha · 3 rondas</li></ul><button class="primary full workout-complete" data-workout="Full body">Completar sesión</button></article>
+        </div>
+        <article class="card"><div class="section-head"><div><span class="kicker">HISTORIAL</span><h3>Últimos entrenamientos</h3></div></div><div id="workoutHistory" class="stack compact"></div></article>
+      </section>
+
+      <section id="finance" class="view">
+        <div class="grid three">
+          <article class="metric card"><span class="kicker">AHORRO TOTAL</span><strong id="financeBalance">$0.00</strong><small>saldo registrado</small></article>
+          <article class="metric card"><span class="kicker">ESTA SEMANA</span><strong id="financeWeek">$0.00</strong><small>ahorrado</small></article>
+          <article class="metric card"><span class="kicker">META</span><strong id="financeGoalText">$0 / $100</strong><small id="financeGoalPct">0%</small></article>
+        </div>
+        <div class="grid two">
+          <article class="card">
+            <span class="kicker">MOVIMIENTO</span><h3>Registrar dinero</h3>
+            <div class="stack"><select id="financeType"><option value="in">+ Ahorro / ingreso</option><option value="out">− Gasto / retiro</option></select><input id="financeAmount" type="number" min="0" step="0.01" placeholder="Cantidad" /><input id="financeReason" placeholder="Motivo (ej. ahorro semanal)" /><button class="primary" id="financeAdd">Guardar movimiento</button></div>
+          </article>
+          <article class="card">
+            <span class="kicker">OBJETIVO</span><h3>Meta de ahorro</h3>
+            <div class="mini-progress"><span id="financeGoalBar"></span></div>
+            <div class="row"><input id="financeGoal" type="number" min="1" step="1" placeholder="Meta total" /><button class="secondary" id="financeGoalSave">Actualizar meta</button></div>
+          </article>
+        </div>
+        <article class="card"><div class="section-head"><div><span class="kicker">HISTORIAL</span><h3>Movimientos</h3></div></div><div id="financeList" class="stack compact"></div></article>
+      </section>
+
+      <section id="school" class="view">
+        <div class="page-head"><p>Registra tus notas y mira qué materias necesitan más atención.</p></div>
+        <div class="grid two">
+          <article class="card"><span class="kicker">NUEVA MATERIA</span><h3>Agregar / actualizar</h3><div class="stack"><input id="subjectName" placeholder="Materia" /><div class="grid two-fields"><input id="subjectCurrent" type="number" step="0.01" placeholder="Nota actual" /><input id="subjectTarget" type="number" step="0.01" placeholder="Meta" /></div><button class="primary" id="subjectAdd">Guardar materia</button></div></article>
+          <article class="card"><span class="kicker">SCHOOL ACCESS</span><h3>Sincronización escolar</h3><p class="help">La conexión automática se puede añadir cuando definamos un método seguro. Por ahora esta sección funciona manualmente y con tus tareas de calendario.</p><button class="secondary" id="schoolImportInfo">Ver opciones de automatización</button></article>
+        </div>
+        <div id="subjectList" class="cards-list" style="margin-top:16px"></div>
+      </section>
+
+      <section id="projects" class="view">
+        <div class="grid two">
+          <article class="card"><span class="kicker">PROYECTO</span><h3>Crear algo real</h3><div class="stack"><input id="projectTitle" placeholder="Ej. Bolso mensajero" /><select id="projectArea"><option>Vértice</option><option>Costura</option><option>Colegio</option><option>Personal</option><option>Otro</option></select><button class="primary" id="projectAdd">Añadir proyecto</button></div></article>
+          <article class="card"><span class="kicker">FLUJO</span><h3>Idea → En proceso → Terminado</h3><p class="help">No necesitas empezar diez cosas. Mueve cada proyecto hasta terminarlo.</p></article>
+        </div>
+        <div id="projectBoard" class="project-board"></div>
+      </section>
+
       <section id="streaks" class="view">
         <div class="page-head"><p>Una racha es evidencia, no presión.</p><button class="primary" id="newStreakBtn">+ Nueva racha</button></div>
         <div id="streakList" class="cards-list"></div>
@@ -130,6 +201,20 @@
         </div>
       </section>
 
+      <section id="journal" class="view">
+        <div class="grid two">
+          <article class="card">
+            <span class="kicker">CIERRE DEL DÍA</span><h3>Check-in diario</h3>
+            <div class="stack"><textarea id="journalGood" placeholder="¿Qué hice bien hoy?"></textarea><textarea id="journalMiss" placeholder="¿Qué fallé o qué puedo ajustar?"></textarea><textarea id="journalNext" placeholder="¿Qué haré diferente mañana?"></textarea><button class="primary" id="journalSave">Guardar check-in</button></div>
+          </article>
+          <article class="card">
+            <span class="kicker">PLAN DE MAÑANA</span><h3>Solo 3 prioridades</h3>
+            <div class="stack"><input class="tomorrow-input" data-i="0" placeholder="Prioridad 1" /><input class="tomorrow-input" data-i="1" placeholder="Prioridad 2" /><input class="tomorrow-input" data-i="2" placeholder="Prioridad 3" /><button class="primary" id="tomorrowSave">Guardar plan</button></div>
+          </article>
+        </div>
+        <article class="card"><div class="section-head"><div><span class="kicker">HISTORIAL</span><h3>Últimos check-ins</h3></div></div><div id="journalHistory" class="stack compact"></div></article>
+      </section>
+
       <section id="stats" class="view">
         <div class="grid three">
           <article class="metric card"><span class="kicker">HOY</span><strong id="statToday">0%</strong><small>victorias</small></article>
@@ -137,6 +222,10 @@
           <article class="metric card"><span class="kicker">METAS</span><strong id="statGoals">0%</strong><small>completadas</small></article>
         </div>
         <article class="card"><div class="section-head"><div><span class="kicker">ÚLTIMOS 7 DÍAS</span><h3>Constancia diaria</h3></div></div><div id="dailyChart" class="bar-chart"></div></article>
+        <div class="grid two">
+          <article class="card"><span class="kicker">NIVEL</span><h3 id="levelTitle">Nivel 1 · Inicio</h3><div class="mini-progress"><span id="levelBar"></span></div><p class="help" id="levelText">0 puntos de disciplina</p></article>
+          <article class="card"><span class="kicker">LOGROS</span><h3>Desbloqueados</h3><div id="badgeList" class="badge-grid"></div></article>
+        </div>
         <article class="card"><div class="section-head"><div><span class="kicker">HISTORIAL</span><h3>Semanas cerradas</h3></div></div><div id="weekHistory" class="history-list"></div></article>
       </section>
 
@@ -189,8 +278,13 @@
     <button class="nav-btn active" data-view="home">⌂<small>Inicio</small></button>
     <button class="nav-btn" data-view="goals">◎<small>Metas</small></button>
     <button class="nav-btn" data-view="calendar">▦<small>Agenda</small></button>
+    <button class="nav-btn" data-view="workout">🏋<small>Entreno</small></button>
+    <button class="nav-btn" data-view="finance">◈<small>Dinero</small></button>
+    <button class="nav-btn" data-view="school">▤<small>Colegio</small></button>
+    <button class="nav-btn" data-view="projects">◇<small>Proyectos</small></button>
     <button class="nav-btn" data-view="streaks">🔥<small>Rachas</small></button>
     <button class="nav-btn" data-view="ideas">✦<small>Ideas</small></button>
+    <button class="nav-btn" data-view="journal">☾<small>Diario</small></button>
     <button class="nav-btn" data-view="stats">↗<small>Progreso</small></button>
   </nav>
 
@@ -230,6 +324,15 @@
       <div class="dialog-head"><h3>Nueva racha</h3><button class="icon-btn" value="cancel">×</button></div>
       <label>Hábito<input id="streakTitle" required placeholder="Ej. Ejercicio" /></label>
       <div class="row end"><button class="secondary" value="cancel">Cancelar</button><button class="primary" id="saveStreakBtn" value="default">Crear</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="emergencyDialog">
+    <form method="dialog">
+      <div class="dialog-head"><div><span class="kicker">PROTOCOLO DE 10 MINUTOS</span><h3>No romper la disciplina</h3></div><button class="icon-btn" value="cancel">×</button></div>
+      <div class="protocol"><div>1. Ponte de pie y cambia de lugar.</div><div>2. Deja el teléfono lejos.</div><div>3. Agua + lávate la cara.</div><div>4. Haz movimiento breve.</div><div>5. No decidas nada durante 10 minutos.</div></div>
+      <div class="urge-timer" id="urgeTimer">10:00</div>
+      <div class="row"><button type="button" class="primary" id="urgeStart">Empezar 10 min</button><button type="button" class="secondary" id="urgeWon">Superé el impulso ✓</button></div>
     </form>
   </dialog>
 
